@@ -17,7 +17,40 @@ import pygame
 import mediapipe as mp
 import numpy as np
 import sys
+import os
 from collections import deque
+
+
+# ══════════════════════════════════════════════════════
+#  한글 폰트 로더 (macOS)
+# ══════════════════════════════════════════════════════
+def load_korean_font(size):
+    """
+    macOS 시스템 한글 폰트를 순서대로 탐색하여 반환.
+    AppleSDGothicNeo → AppleGothic → Arial Unicode → 시스템 폴백
+    """
+    candidates = [
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/ArialHB.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return pygame.font.Font(path, size)
+            except Exception:
+                continue
+    # 최후 폴백 — 시스템 폰트
+    for name in ["applegothic", "arial", "freesansbold"]:
+        try:
+            f = pygame.font.SysFont(name, size)
+            if f:
+                return f
+        except Exception:
+            continue
+    return pygame.font.Font(None, size)
 
 # ── 화면 설정 ──────────────────────────────────────────
 WINDOW_W, WINDOW_H = 1280, 720
@@ -256,8 +289,8 @@ def overlay_skeleton(frame, metrics, errors):
     cv2.line(frame, sho, hip, back_color, 3)
 
     for pt in [metrics["r_knee"], metrics["l_knee"],
-              metrics["r_hip"],  metrics["l_hip"],
-              metrics["r_ankle"], metrics["l_ankle"]]:
+               metrics["r_hip"],  metrics["l_hip"],
+               metrics["r_ankle"], metrics["l_ankle"]]:
         cv2.circle(frame, pt, 7, color, -1)
 
     # 무릎 각도 텍스트
@@ -272,17 +305,18 @@ def overlay_skeleton(frame, metrics, errors):
 # ══════════════════════════════════════════════════════
 def main():
     pygame.init()
+    pygame.font.init()   # 한글 폰트 서브시스템 명시적 초기화
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
     pygame.display.set_caption("Squat Posture Coach")
     clock = pygame.time.Clock()
 
-    font_xl = pygame.font.SysFont("Arial", 52, bold=True)
-    font_lg = pygame.font.SysFont("Arial", 42, bold=True)
-    font_md = pygame.font.SysFont("Arial", 28, bold=True)
-    font_sm = pygame.font.SysFont("Arial", 21)
-    font_xs = pygame.font.SysFont("Arial", 17)
+    font_xl = load_korean_font(52)
+    font_lg = load_korean_font(42)
+    font_md = load_korean_font(28)
+    font_sm = load_korean_font(21)
+    font_xs = load_korean_font(17)
 
-    cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  CAM_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_H)
     if not cap.isOpened():
@@ -406,11 +440,11 @@ def main():
 
                     if ka > up_thresh:   # 올라옴
                         if bad_rep:
-                            feedback_msg = "❌ 자세 오류 — 카운트 제외"
+                            feedback_msg = "[X] 자세 오류 - 카운트 제외"
                             feedback_col = RED
                         else:
                             squat_count += 1
-                            feedback_msg = f"✔ {squat_count}회 완료!"
+                            feedback_msg = f"[OK] {squat_count}회 완료!"
                             feedback_col = GREEN
                         squat_state = "UP"
                         bad_rep     = False
@@ -540,7 +574,7 @@ def main():
                     (ka - calib.ref_knee_down) / max(calib.ref_knee_up - calib.ref_knee_down, 1),
                     0, 1)
                 draw_bar(screen, (px, py, PANEL_W - 36, 16),
-                        ratio, GREEN if ratio > 0.6 else YELLOW)
+                         ratio, GREEN if ratio > 0.6 else YELLOW)
                 py += 34
 
                 # 허리 기울기
@@ -557,10 +591,9 @@ def main():
 
             # 피드백 / 오류
             if errors:
-                draw_text(screen, "⚠ 자세 오류", (cx, py), font_sm, RED, center=True)
+                draw_text(screen, "[!] 자세 오류", (cx, py), font_sm, RED, center=True)
                 py += 30
                 for err in errors:
-                    # 긴 문장 분할
                     draw_text(screen, err, (cx, py), font_xs, ORANGE, center=True)
                     py += 24
             elif feedback_msg:
@@ -569,12 +602,12 @@ def main():
 
             # 웹캠 미감지
             if not detected:
-                draw_text(screen, "⚠ 화면 밖으로 나갔어요",
+                draw_text(screen, "[!] 화면 밖으로 나갔어요",
                           (cx, WINDOW_H - 70), font_xs, RED, center=True)
 
         # 하단 공통 안내
         pygame.draw.line(screen, GRAY,
-                        (CAM_W + 10, WINDOW_H - 38), (WINDOW_W - 10, WINDOW_H - 38), 1)
+                         (CAM_W + 10, WINDOW_H - 38), (WINDOW_W - 10, WINDOW_H - 38), 1)
         draw_text(screen, "Q: 종료   R: 재캘리브레이션",
                   (cx, WINDOW_H - 20), font_xs, (110, 110, 110), center=True)
 
